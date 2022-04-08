@@ -30,8 +30,8 @@ jobs:
 
       - name: Set flow config
         run: |
-          config_name="FLOW_CONFIG_${{ steps.cf-setup.outputs.target-environment-upper }}"
-          echo  ${{ secrets[env.config_name] }} > vars-env.yaml
+          echo "CONFIG_NAME=FLOW_CONFIG_${{ steps.cf-setup.outputs.target-environment-upper }}" >> $GITHUB_ENV
+          echo  ${{ secrets[env.CONFIG_NAME] }} > vars-env.yaml
 
       - name: Deploy application
         run: cf push --vars-file vars.yaml --vars-file vars-env.yaml
