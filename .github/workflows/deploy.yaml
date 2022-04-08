@@ -30,7 +30,7 @@ jobs:
 
       - name: Set flow config
         run: |
-          echo "$FLOW_CONFIG_${{ steps.cf-setup.outputs.target-environment-upper }}" vars-env.yaml
+          echo "$FLOW_CONFIG_${{ steps.cf-setup.outputs.target-environment-upper }}" > vars-env.yaml
 
       - name: Deploy application
         run: cf push --vars-file vars.yaml --vars-file vars-env.yaml
