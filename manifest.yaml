@@ -1,0 +1,20 @@
+---
+applications:
+  - name: flow-client
+    routes:
+      - route: idva-client-((ENVIRONMENT)).app.cloud.gov
+    memory: ((MEMORY))
+    instances: ((INSTANCES))
+    buildpacks:
+      - python_buildpack
+    command: uvicorn flow_client.main:app --host 0.0.0.0 --port $PORT
+    env:
+      FLOW_ISSUER: ((FLOW_ISSUER))
+      FLOW_URL: ((FLOW_URL))
+      FLOW_CLIENT_ID: ((FLOW_CLIENT_ID))
+      FLOW_CLIENT_SECRET: ((FLOW_CLIENT_SECRET))
+      FLOW_REDIRECT_URI: ((FLOW_REDIRECT_URI))
+      FLOW_PRIVATE_KEY: ((FLOW_PRIVATE_KEY))
+      FLOW_PUBLIC_KEY: ((FLOW_PUBLIC_KEY))
+      USERNAME: ((USERNAME))
+      PASSWORD: ((PASSWORD))

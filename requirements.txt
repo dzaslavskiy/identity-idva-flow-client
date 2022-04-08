@@ -1,0 +1,14 @@
+pyjwt
+requests
+pyjwt[crypto]
+aiohttp ~= 3.8
+twisted[tls, http2]
+google-auth
+requests
+fastapi
+uvicorn
+pydantic
+starlette-prometheus
+Authlib
+httpx
+itsdangerous
