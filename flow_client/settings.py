@@ -1,26 +1,27 @@
-"""
-Configuration for the USPS microservice settings.
-Context is switched based on if the app is in debug mode.
-"""
+from datetime import timedelta
 import os
+import json
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG set is set to True if env var is "True"
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-OIDC_URL = os.getenv("URL")
+FLOW_CLIENT_CONFIG = os.getenv("FLOW_CLIENT_CONFIG")
+oidc_config = json.loads(FLOW_CLIENT_CONFIG)
 
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
 
-FLOW_ISSUER = os.getenv("FLOW_ISSUER")
-FLOW_URL = os.getenv("FLOW_URL")
-FLOW_CLIENT_ID = os.getenv("FLOW_CLIENT_ID")
-FLOW_CLIENT_SECRET = os.getenv("FLOW_CLIENT_SECRET")
+FLOW_ISSUER = oidc_config['flow_issuer']
+FLOW_CLIENT_ID = oidc_config['flow_client_id']
+FLOW_CLIENT_SECRET = oidc_config['flow_client_secret']
+FLOW_REDIRECT_URI = oidc_config['flow_redirect_uri']
+FLOW_CLIENT_ISSUER = oidc_config['flow_client_issuer']
+FLOWS = oidc_config['flows']
+KEYS = oidc_config['keys']
 
-FLOW_REDIRECT_URI = os.getenv("FLOW_REDIRECT_URI")
+VALID_FOR = timedelta(days=oidc_config['flow_request_validity']['days'],seconds=oidc_config['flow_request_validity']['seconds'])
 
-FLOW_PRIVATE_KEY = bytes(os.getenv("FLOW_PRIVATE_KEY",""), "utf-8").decode('unicode_escape')
-FLOW_PUBLIC_KEY = bytes(os.getenv("FLOW_PUBLIC_KEY",""), "utf-8").decode('unicode_escape')
+KEYCLOAK_CLIENT_ID = oidc_config['keycloak_client_id']
+KEYCLOAK_CLIENT_SECRET = oidc_config['keycloak_client_secret']
+KEYCLOAK_METADATA_URL = oidc_config['keycloak_metadata_url']
+
+SESSION_SECRET = oidc_config['session_secret']

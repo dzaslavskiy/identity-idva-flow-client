@@ -28,10 +28,23 @@ jobs:
           cf-password: ${{ secrets.CF_PASSWORD }}
           cf-org: ${{ secrets.CF_ORG }}
 
-      - name: Set flow config
+      - name: Set flow config name
         run: |
-          echo "CONFIG_NAME=FLOW_CONFIG_${{ steps.cf-setup.outputs.target-environment-upper }}" >> $GITHUB_ENV
-          echo  ${{ secrets[env.CONFIG_NAME] }} > vars-env.yaml
+          target_env_upper=${{ steps.cf-setup.outputs.target-environment-upper }}
+          echo "FLOW_CLIENT_CONFIG_NAME=FLOW_CLIENT_CONFIG_$target_env_upper" >> $GITHUB_ENV
+
+      - name: Write flow config to file
+        env:
+          FLOW_CLIENT_CONFIG: ${{ secrets[env.FLOW_CLIENT_CONFIG_NAME] }}
+        run: |
+          # Ensure the secret is valid JSON
+          echo "$FLOW_CLIENT_CONFIG" | jq empty
+          {
+            echo "---"
+            echo "FLOW_CLIENT_CONFIG: |"
+            # sed formats yaml value with proper indentation
+            echo "$FLOW_CLIENT_CONFIG" | sed 's/^/  /'
+          } > vars-env.yaml
 
       - name: Deploy application
         run: cf push --vars-file vars.yaml --vars-file vars-env.yaml

@@ -1,144 +1,91 @@
-import json
 import logging
-import time
-from http import HTTPStatus
-from typing import Optional
-from uuid import UUID
-import secrets
 
-import jwt
-import requests
-from aiohttp import ClientError, ClientSession
 from authlib.integrations.starlette_client import OAuth, OAuthError
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from pydantic import BaseModel
-from requests import Request as RRequest
-from requests.auth import HTTPBasicAuth
-from starlette.config import Config
+from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette_prometheus import PrometheusMiddleware, metrics
 
-from flow_client import settings
+from flow_client import settings, sig_gen
 
 app = FastAPI()
 
-security = HTTPBasic()
-
-app.add_middleware(SessionMiddleware, secret_key="!secret")
+app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET)
 
 app.add_middleware(PrometheusMiddleware)
 app.add_route("/metrics/", metrics)
 
 logging.getLogger().setLevel(logging.INFO)
 
-#config = Config('.env')  # read config from .env file
 oauth = OAuth()
-
 oauth.register(
-    name='google',
-    client_id='...',
-    client_secret='...',
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid profile'
-    }
+    name="keycloak",
+    client_id=settings.KEYCLOAK_CLIENT_ID,
+    client_secret=settings.KEYCLOAK_CLIENT_SECRET,
+    server_metadata_url=settings.KEYCLOAK_METADATA_URL,
+    client_kwargs={"scope": "openid profile"},
 )
 
-# @app.get('/')
-# async def homepage(request: Request):
-#     user = request.session.get('user')
-#     if user:
-#         data = json.dumps(user)
-#         html = (
-#             f'<pre>{data}</pre>'
-#             '<a href="/flow">flow</a>'
-#             '<a href="/logout">logout</a>'
-#         )
-#         return HTMLResponse(html)
-#     return HTMLResponse('<a href="/login">login</a>')
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = secrets.compare_digest(credentials.username, settings.USERNAME)
-    correct_password = secrets.compare_digest(credentials.password, settings.PASSWORD)
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+@app.get("/")
+async def homepage(request: Request):
 
+    user = request.session.get("user")
+    if not user:
+        return HTMLResponse('<a href="/login">login</a>')
 
-@app.get('/')
-async def homepage(username: str = Depends(get_current_username)):
-    html = (
-        f'<pre>hello?</pre>'
-        '<a href="/flow">flow</a></br>'
-        '<a href="/logout">logout</a>'
-    )
+    html = ""
+    for flow in settings.FLOWS:
+        html += f'<div><a href="/flow/{flow}">flow: {flow}</a></div>'
+    html += '<div><a href="/logout">logout</a></div>'
     return HTMLResponse(html)
 
 
-@app.get('/login')
+@app.get("/login")
 async def login(request: Request):
-    redirect_uri = request.url_for('auth')
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    redirect_uri = request.url_for("auth")
+    return await oauth.keycloak.authorize_redirect(request, redirect_uri)
 
-@app.get('/auth')
+
+@app.get("/auth")
 async def auth(request: Request):
     try:
-        token = await oauth.google.authorize_access_token(request)
+        token = await oauth.keycloak.authorize_access_token(request)
     except OAuthError as error:
-        return HTMLResponse(f'<h1>{error.error}</h1>')
-    user = token.get('userinfo')
+        return HTMLResponse(f"<h1>{error.error}</h1>")
+    user = token.get("userinfo")
     if user:
-        request.session['user'] = dict(user)
-    return RedirectResponse(url='/')
+        request.session["user"] = dict(user)
+    return RedirectResponse(url="/")
 
-@app.get('/logout')
+
+@app.get("/logout")
 async def logout(request: Request):
-    request.session.pop('user', None)
-    return RedirectResponse(url='/')
+    request.session.pop("user", None)
+    return RedirectResponse(url="/")
 
-@app.get('/flow')
+
+@app.get("/flow/{flow_name}")
+async def flow(flow_name, request: Request):
+
+    user = request.session.get("user")
+    if not user:
+        return HTMLResponse('<a href="/login">login</a>')
+
+    if flow_name not in settings.FLOWS:
+        return HTMLResponse('no such flow', status_code=404)
+
+    url = settings.FLOWS[flow_name]
+    request = sig_gen.gen_sig_url(url, settings.VALID_FOR)
+    return RedirectResponse(url=request.url, status_code=302)
+
+
+@app.get("/jwks.json")
 async def flow():
-
-    STATE = "H5hNTZGm6vo1-02OaA51nGnBaoJM58WdHWhUh1AspKk"
-    epoch_time = int(time.time()) + 60
-
-    jwt_data = {
-        "iss": "http://127.0.0.100:8088",
-        "aud": settings.FLOW_ISSUER,
-        "response_type": "code",
-        "client_id": settings.FLOW_CLIENT_ID,
-        "scope": "openid profile",
-        "state": STATE,
-        "redirect_uri": settings.FLOW_REDIRECT_URI,
-        "nonce": "M58WdHWhUh1AspK",
-        "exp": epoch_time
+    public_key = {
+        k: v
+        for (k, v) in settings.KEYS[0].items()
+        if k in ["kty", "e", "use", "kid", "alg", "n"]
     }
-
-    encoded_jwt = jwt.encode(jwt_data, settings.FLOW_PRIVATE_KEY, algorithm="RS256")
-    
-    try:
-        decode = jwt.decode(encoded_jwt, settings.FLOW_PUBLIC_KEY, audience=settings.FLOW_ISSUER, algorithms=["RS256"])
-        print(decode)
-    except jwt.ExpiredSignatureError:
-        print("expired!!!!")
-    
-    query = {
-        "response_type": "code",
-        "client_id": settings.FLOW_CLIENT_ID,
-        "scope": "openid profile",
-        "state": STATE,
-        "redirect_uri": settings.FLOW_REDIRECT_URI,
-        "nonce": "M58WdHWhUh1AspK",
-        "request": encoded_jwt,
-    }
-    p = RRequest('GET', settings.FLOW_URL, params=query).prepare()
-    
-    return RedirectResponse(url=p.url, status_code=302)
+    return {"keys": [public_key]}
