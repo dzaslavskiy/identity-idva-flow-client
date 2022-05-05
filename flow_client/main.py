@@ -74,7 +74,7 @@ async def flow(flow_name, request: Request):
         return HTMLResponse('<a href="/login">login</a>')
 
     if flow_name not in settings.FLOWS:
-        return HTMLResponse('no such flow', status_code=404)
+        return HTMLResponse("no such flow", status_code=404)
 
     url = settings.FLOWS[flow_name]
     request = sig_gen.gen_sig_url(url, settings.VALID_FOR)
